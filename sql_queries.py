@@ -1,5 +1,5 @@
 
-#DROP TABLES
+#DROP TABLES IF EXISTS
 
 songplay_table_drop = "DROP table IF EXISTS songplays"
 user_table_drop = "DROP table IF EXISTS users"

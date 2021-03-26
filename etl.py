@@ -6,33 +6,59 @@ import pandas as pd
 from sql_queries import *
 
 def insert_record(cur, insert_query, df, fields):
+
+    #cur: connection cursor to the database
+    #insert_query: SQL query to insert the record
+    #df: dataframe with the record
+    #fields: array of fields of the data to be inserted
+
     record = df[fields].values[0].tolist()
     cur.execute(insert_query,record)
 
-def insert_dataframe(cur, insert_query, df):
+def insert_dataframe(cur, df, insert_query):
+
+    #cur: connection cursor to the database
+    #insert_query: SQL query to insert the record
+    #df: dataframe with the record
+
     for i, row in df.iterrows():
         cur.execute(insert_query,list(row))
 
 def process_song_file(cur, filepath):
+
+    #process the song files and insert data into dimension tables songs and artists
+
+    #open song file
     df= pd.read_json(filepath,lines=True)
 
+    #insert song record
     insert_record(cur,song_table_insert,df,['song_id', 'title', 'artist_id', 'year', 'duration'])
 
+    #insert artist record
     insert_record(cur,artist_table_insert,df,['artist_id', 'artist_name', 'artist_location', 'artist_latitude', 'artist_longitude'])
 
 def expand_time_data(df, ts_field):
+
+    #Add more time elements by expanding the timestamp
+
     df['datetime']=pd.to_datetime(df[ts_field],unit='ms')
     t=df
     t['year']=t['datetime'].dt.year
-    t['month']=t['datatime'].dt.month
+    t['month']=t['datetime'].dt.month
     t['day']=t['datetime'].dt.day
     t['hour']=t['datetime'].dt.hour
-    t['weekday_name'] = t['datetime'].dt.weekday_name
+    t['weekday_name'] = t['datetime'].dt.day_name()
     t['week'] = t['datetime'].dt.week
-
+    
     return t
 
 def get_songid_artistid(cur,song,artist,length):
+    
+    #cur: connection cursor to the database
+    #song,artist: song title, artist name
+    #length : song duration
+
+    #get songid and artistid from song and artist tables
     cur.execute(song_select,(song,artist,length))
     results = cur.fetchone()
     if results:
@@ -43,12 +69,17 @@ def get_songid_artistid(cur,song,artist,length):
     return songid, artistid
 
 def insert_facts_songplays(cur,df):
+
+    #insert songplay records in the fact table
+     
     for i, row in df.iterrows():
         song_id,artist_id= get_songid_artistid(cur,row.song,row.artist,row.length)
-
+        song_id=str(song_id)
+        artist_id=str(artist_id)
         songplay_data= (row.ts, row.userId, row.level, song_id, artist_id,
                          row.itemInSession, row.location, row.userAgent)
-        cur.execute(song_table_insert,songplay_data)
+        
+        cur.execute(songplay_table_insert,songplay_data)
 
 def process_log_file(cur,filepath):
     # open log file
@@ -59,10 +90,10 @@ def process_log_file(cur,filepath):
 
     # convert timestamp column to datetime
     t = expand_time_data(df, 'ts')
-
+    
     # insert time data records
     time_df = t[['ts', 'hour', 'day', 'week', 'month', 'year', 'weekday_name']]
-
+   
     insert_dataframe(cur, time_df, time_table_insert)
 
     # load user table
@@ -102,8 +133,8 @@ def process_data(cur, conn, filepath, func):
         print('{}/{} files processed.'.format(i, num_files))
 
 def main():
-    #conn = psycopg2.connect("host=127.0.0.1 dbname=sparkifydb user=student password=student")
-    conn = psycopg2.connect("host=127.0.0.1 dbname=sparkifydb user=postgres password=postgres")
+
+    conn = psycopg2.connect("host=127.0.0.1 dbname=postgres user=postgres password=postgres port=5432")
     cur = conn.cursor()
 
     process_data(cur, conn, filepath='data/song_data', func=process_song_file)
